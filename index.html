@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Livro-Caixa</title>
+<meta name="description" content="Controle simples de receitas e despesas.">
+<meta name="theme-color" content="#EAE6D9">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Livro-Caixa">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --paper: #EAE6D9;
+    --paper-raised: #F3F0E6;
+    --ink: #1F2A24;
+    --ink-soft: #55645A;
+    --line: #C7C0A9;
+    --receita: #1F6F50;
+    --receita-soft: #E1EEE5;
+    --despesa: #AF4132;
+    --despesa-soft: #F3E3DF;
+    --gold: #A9791F;
+    --shadow: 0 1px 0 rgba(31,42,36,0.06), 0 8px 24px -12px rgba(31,42,36,0.25);
+    --radius: 2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top left, rgba(169,121,31,0.06), transparent 55%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+
+  /* Header */
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:28px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:28px;
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  h1 span{color:var(--gold); font-style:italic; font-weight:500;}
+  .tagline{font-size:12px; color:var(--ink-soft); margin-top:2px; letter-spacing:0.02em;}
+
+  .month-nav{display:flex; align-items:center; gap:14px;}
+  .month-nav button{
+    background:none; border:1px solid var(--line); color:var(--ink);
+    width:30px; height:30px; border-radius:50%; cursor:pointer;
+    font-family:'IBM Plex Mono', monospace; font-size:14px;
+    display:flex; align-items:center; justify-content:center;
+    transition:background 0.15s;
+  }
+  .month-nav button:hover{background:var(--paper-raised);}
+  .month-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; text-transform:uppercase; letter-spacing:0.08em;
+    min-width:110px; text-align:center;
+  }
+
+  /* Receipt summary card */
+  .receipt{
+    position:relative;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    padding:26px 28px 22px;
+    margin-bottom:32px;
+    transform:rotate(-0.35deg);
+  }
+  .receipt::before, .receipt::after{
+    content:"";
+    position:absolute; left:0; right:0; height:10px;
+    background:
+      radial-gradient(circle at 8px 50%, transparent 5px, var(--paper) 5.5px) repeat-x;
+    background-size:16px 10px;
+  }
+  .receipt::before{top:-6px;}
+  .receipt::after{bottom:-6px; transform:rotate(180deg);}
+  .receipt-row{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    gap:24px; flex-wrap:wrap;
+  }
+  .receipt-item .label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.1em;
+    color:var(--ink-soft); margin-bottom:6px;
+  }
+  .receipt-item .value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:22px; font-weight:600;
+  }
+  .receipt-item.saldo .value{font-size:30px;}
+  .value.pos{color:var(--receita);}
+  .value.neg{color:var(--despesa);}
+
+  /* Layout */
+  .grid{display:grid; grid-template-columns: 340px 1fr; gap:28px;}
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    padding:20px;
+  }
+  .panel h2{
+    font-family:'Fraunces', serif; font-size:16px; font-weight:600;
+    margin:0 0 16px; padding-bottom:10px; border-bottom:1px dashed var(--line);
+  }
+
+  /* Form */
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--ink-soft); margin-bottom:5px;
+  }
+  .field input, .field select{
+    width:100%; padding:9px 10px; border:1px solid var(--line);
+    background:var(--paper); color:var(--ink); font-family:'Inter', sans-serif;
+    font-size:14px; border-radius:var(--radius);
+  }
+  .field input:focus, .field select:focus{
+    outline:2px solid var(--gold); outline-offset:1px;
+  }
+  .toggle-tipo{display:flex; gap:8px; margin-bottom:14px;}
+  .toggle-tipo button{
+    flex:1; padding:9px 0; border:1px solid var(--line); background:var(--paper);
+    cursor:pointer; font-family:'Inter'; font-size:13px; font-weight:500;
+    color:var(--ink-soft); transition:all 0.15s;
+  }
+  .toggle-tipo button.active[data-tipo="receita"]{
+    background:var(--receita-soft); color:var(--receita); border-color:var(--receita);
+  }
+  .toggle-tipo button.active[data-tipo="despesa"]{
+    background:var(--despesa-soft); color:var(--despesa); border-color:var(--despesa);
+  }
+  .btn-add{
+    width:100%; padding:11px 0; background:var(--ink); color:var(--paper);
+    border:none; font-family:'Inter'; font-weight:600; font-size:14px;
+    cursor:pointer; letter-spacing:0.01em; transition:opacity 0.15s;
+  }
+  .btn-add:hover{opacity:0.85;}
+
+  /* Quick add strip */
+  .quick-add{
+    display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;
+    background:var(--paper-raised); border:1px solid var(--line);
+    border-left:3px solid var(--gold);
+    padding:14px 16px; margin-bottom:32px;
+  }
+  .quick-add .qa-label{
+    font-family:'Fraunces', serif; font-style:italic; font-size:13px;
+    color:var(--ink-soft); flex-basis:100%; margin-bottom:2px;
+  }
+  .quick-add .qa-field{flex:1; min-width:120px;}
+  .quick-add .qa-field label{
+    display:block; font-size:10px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--ink-soft); margin-bottom:4px;
+  }
+  .quick-add .qa-field input{
+    width:100%; padding:8px 9px; border:1px solid var(--line);
+    background:var(--paper); color:var(--ink); font-family:'Inter', sans-serif;
+    font-size:14px; border-radius:var(--radius);
+  }
+  .quick-add .qa-field input:focus{ outline:2px solid var(--gold); outline-offset:1px; }
+  .qa-btn{
+    padding:9px 18px; background:var(--despesa); color:var(--paper-raised);
+    border:none; font-family:'Inter'; font-weight:600; font-size:13px;
+    cursor:pointer; white-space:nowrap; transition:opacity 0.15s;
+  }
+  .qa-btn:hover{opacity:0.85;}
+
+  /* Daily spending chart */
+  .daily-chart{
+    display:flex; align-items:flex-end; gap:3px; height:110px;
+    padding-top:8px; overflow-x:auto;
+  }
+  .daily-col{
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    height:100%; min-width:16px; flex:1;
+  }
+  .daily-col .bar{
+    width:100%; max-width:18px; background:var(--despesa); opacity:0.75;
+    border-radius:1px 1px 0 0; transition:opacity 0.15s;
+  }
+  .daily-col:hover .bar{opacity:1;}
+  .daily-col .bar.empty{background:var(--line); opacity:0.4; height:2px !important;}
+  .daily-col .daynum{
+    font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--ink-soft);
+    margin-top:6px;
+  }
+  .daily-col.today .daynum{color:var(--gold); font-weight:600;}
+  .daily-summary{
+    display:flex; justify-content:space-between; margin-top:14px;
+    padding-top:12px; border-top:1px dashed var(--line);
+    font-size:12px; color:var(--ink-soft);
+  }
+  .daily-summary .val{font-family:'IBM Plex Mono', monospace; color:var(--ink); font-weight:600;}
+
+  .field-inline{ margin-bottom:10px; }
+  .checkbox-label{
+    display:flex; align-items:center; gap:8px; font-size:13px;
+    color:var(--ink); cursor:pointer;
+  }
+  .checkbox-label input{ width:16px; height:16px; accent-color:var(--gold); cursor:pointer; }
+  .field-hint{ font-size:11px; color:var(--ink-soft); margin-top:5px; }
+  .panel-desc{ font-size:12px; color:var(--ink-soft); margin:-8px 0 14px; line-height:1.5; }
+
+  .fixos-list{ margin-top:16px; }
+  .fixo-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 0; border-bottom:1px solid var(--line); gap:10px;
+  }
+  .fixo-row:last-child{ border-bottom:none; }
+  .fixo-left{ display:flex; align-items:center; gap:9px; min-width:0; }
+  .fixo-info .desc{ font-size:13px; font-weight:500; }
+  .fixo-info .meta{ font-size:11px; color:var(--ink-soft); }
+  .fixo-val{ font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; white-space:nowrap; }
+  .fixo-del{
+    background:none; border:none; color:var(--ink-soft); cursor:pointer;
+    font-size:16px; padding:2px 4px; opacity:0.5;
+  }
+  .fixo-del:hover{ opacity:1; color:var(--despesa); }
+  .fixo-edit{
+    background:none; border:none; color:var(--ink-soft); cursor:pointer;
+    font-size:13px; padding:2px 4px; opacity:0.6;
+  }
+  .fixo-edit:hover{ opacity:1; color:var(--gold); }
+
+  .badge{
+    display:inline-block; font-family:'IBM Plex Mono', monospace; font-size:10px;
+    padding:1px 6px; border-radius:8px; margin-left:6px; letter-spacing:0.02em;
+  }
+  .badge.parcela{ background:var(--paper); border:1px solid var(--gold); color:var(--gold); }
+  .badge.fixo{ background:var(--paper); border:1px solid var(--ink-soft); color:var(--ink-soft); }
+
+  /* Category bars */
+  .cat-bar{margin-bottom:12px;}
+  .cat-bar-top{display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;}
+  .cat-bar-top .nome{color:var(--ink);}
+  .cat-bar-top .val{font-family:'IBM Plex Mono', monospace; color:var(--ink-soft);}
+  .cat-bar-track{background:var(--paper); height:6px; border:1px solid var(--line);}
+  .cat-bar-fill{height:100%; background:var(--despesa);}
+  .cat-bar-fill.receita{background:var(--receita);}
+  .empty-note{font-size:13px; color:var(--ink-soft); font-style:italic;}
+
+  /* Transactions list */
+  .tx-day{margin-bottom:18px;}
+  .tx-day-label{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--ink-soft); margin-bottom:8px;
+  }
+  .tx-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 0; border-bottom:1px solid var(--line);
+    gap:12px;
+  }
+  .tx-row:last-child{border-bottom:none;}
+  .tx-left{display:flex; align-items:center; gap:10px; min-width:0;}
+  .tx-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  .tx-dot.receita{background:var(--receita);}
+  .tx-dot.despesa{background:var(--despesa);}
+  .tx-info .desc{font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .tx-info .cat{font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.04em;}
+  .tx-right{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+  .tx-val{font-family:'IBM Plex Mono', monospace; font-size:14px; font-weight:600;}
+  .tx-del{
+    background:none; border:none; color:var(--ink-soft); cursor:pointer;
+    font-size:16px; line-height:1; padding:2px 4px; opacity:0.5; transition:opacity 0.15s;
+  }
+  .tx-del:hover{opacity:1; color:var(--despesa);}
+
+  .empty-state{
+    text-align:center; padding:36px 12px; color:var(--ink-soft);
+  }
+  .empty-state .big{font-family:'Fraunces', serif; font-style:italic; font-size:18px; color:var(--ink); margin-bottom:4px;}
+  .empty-state .small{font-size:13px;}
+
+  footer{
+    text-align:center; margin-top:40px; font-size:11px; color:var(--ink-soft);
+    letter-spacing:0.04em;
+  }
+
+  ::selection{background:var(--gold); color:var(--paper);}
+
+  .footer-link-btn{
+    background:none; border:none; color:inherit; font-family:'Inter', sans-serif;
+    font-size:11px; letter-spacing:0.04em; cursor:pointer; text-decoration:underline;
+    padding:0;
+  }
+
+  .pix-overlay{
+    position:fixed; inset:0; background:rgba(31,42,34,0.55);
+    display:none; align-items:center; justify-content:center;
+    z-index:200; padding:20px;
+  }
+  .pix-overlay.open{ display:flex; }
+  .pix-box{
+    position:relative; width:100%; max-width:380px;
+    background:var(--paper-raised); border:1px solid var(--line);
+    box-shadow:var(--shadow); padding:28px 24px 22px;
+  }
+  .pix-close{
+    position:absolute; top:10px; right:14px; background:none; border:none;
+    font-size:20px; color:var(--ink-soft); cursor:pointer; line-height:1;
+  }
+  .pix-title{
+    font-family:'Fraunces', serif; font-weight:700; font-size:19px;
+    color:var(--ink); margin-bottom:10px;
+  }
+  .pix-text{ font-size:13px; color:var(--ink-soft); line-height:1.6; margin-bottom:18px; }
+  .pix-key-box{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--paper); border:1px dashed var(--gold); padding:10px 12px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink);
+  }
+  .pix-key-box span{ word-break:break-all; }
+  #pixCopyBtn{
+    flex-shrink:0; background:var(--ink); color:var(--paper); border:none;
+    padding:7px 12px; font-family:'Inter'; font-size:12px; font-weight:600;
+    cursor:pointer;
+  }
+  #pixCopyBtn:hover{ opacity:0.85; }
+  #pixCopyBtn.copied{ background:var(--receita); }
+  .pix-thanks{ margin-top:16px; font-size:13px; color:var(--ink-soft); text-align:center; }
+
+  /* Auth overlay */
+  #authOverlay{
+    position:fixed; inset:0; background:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+    z-index:100; padding:20px;
+  }
+  .auth-box{
+    width:100%; max-width:360px; background:var(--paper-raised);
+    border:1px solid var(--line); box-shadow:var(--shadow);
+    padding:32px 28px;
+  }
+  .auth-box h1{ text-align:center; margin-bottom:4px; }
+  .auth-box .tagline{ text-align:center; margin-bottom:24px; }
+  .auth-tabs{ display:flex; gap:8px; margin-bottom:18px; }
+  .auth-tabs button{
+    flex:1; padding:8px 0; border:1px solid var(--line); background:var(--paper);
+    cursor:pointer; font-family:'Inter'; font-size:13px; color:var(--ink-soft);
+  }
+  .auth-tabs button.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .auth-error{
+    font-size:12px; color:var(--despesa); margin-top:8px; min-height:14px;
+  }
+  .auth-note{ font-size:11px; color:var(--ink-soft); margin-top:14px; text-align:center; }
+  .user-bar{
+    display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-soft);
+  }
+  .user-bar button{
+    background:none; border:1px solid var(--line); color:var(--ink-soft);
+    padding:5px 10px; cursor:pointer; font-family:'Inter'; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .user-bar button:hover{ color:var(--despesa); border-color:var(--despesa); }
+  .sync-status{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--ink-soft);
+    display:flex; align-items:center; gap:5px;
+  }
+  .sync-dot{ width:6px; height:6px; border-radius:50%; background:var(--receita); }
+  .sync-dot.off{ background:var(--despesa); }
+</style>
+</head>
+<body>
+<div id="authOverlay">
+  <div class="auth-box">
+    <h1>Livro-<span>Caixa</span></h1>
+    <div class="tagline">entre para sincronizar seus dados</div>
+    <div class="auth-tabs">
+      <button type="button" id="tabLogin" class="active">Entrar</button>
+      <button type="button" id="tabSignup">Criar conta</button>
+    </div>
+    <div class="field">
+      <label for="authEmail">E-mail</label>
+      <input type="email" id="authEmail" placeholder="voce@email.com">
+    </div>
+    <div class="field">
+      <label for="authSenha">Senha</label>
+      <input type="password" id="authSenha" placeholder="mínimo 6 caracteres">
+    </div>
+    <button class="btn-add" id="authSubmit">Entrar</button>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-note">seus lançamentos ficam vinculados a essa conta e sincronizam entre aparelhos</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Livro-<span>Caixa</span></h1>
+      <div class="tagline">receitas &amp; despesas, registradas com clareza</div>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:10px;">
+      <div class="user-bar">
+        <span class="sync-status"><span class="sync-dot off" id="syncDot"></span><span id="syncText">offline</span></span>
+        <span id="userEmail"></span>
+        <button id="logoutBtn" style="display:none;">Sair</button>
+      </div>
+      <div class="month-nav">
+        <button id="prevMonth" aria-label="Mês anterior">&larr;</button>
+        <div class="month-label" id="monthLabel">—</div>
+        <button id="nextMonth" aria-label="Próximo mês">&rarr;</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="receipt">
+    <div class="receipt-row">
+      <div class="receipt-item">
+        <div class="label">Receitas</div>
+        <div class="value pos" id="totalReceitas">R$ 0,00</div>
+      </div>
+      <div class="receipt-item">
+        <div class="label">Despesas</div>
+        <div class="value neg" id="totalDespesas">R$ 0,00</div>
+      </div>
+      <div class="receipt-item saldo">
+        <div class="label">Saldo do mês</div>
+        <div class="value" id="totalSaldo">R$ 0,00</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="quick-add">
+    <div class="qa-label">registro rápido &mdash; gasto de hoje</div>
+    <div class="qa-field">
+      <label for="qaDesc">Descrição</label>
+      <input type="text" id="qaDesc" placeholder="Ex: Café, Uber, Padaria...">
+    </div>
+    <div class="qa-field" style="flex:0 0 120px;">
+      <label for="qaValor">Valor (R$)</label>
+      <input type="number" id="qaValor" placeholder="0,00" step="0.01" min="0">
+    </div>
+    <button class="qa-btn" id="qaBtn">Registrar</button>
+  </div>
+
+  <div class="panel" style="margin-bottom:28px;">
+    <h2>Gastos diários — <span id="dailyMonthLabel"></span></h2>
+    <div class="daily-chart" id="dailyChart"></div>
+    <div class="daily-summary">
+      <div>Média por dia: <span class="val" id="dailyAvg">R$ 0,00</span></div>
+      <div>Dia de maior gasto: <span class="val" id="dailyMax">—</span></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="col-left">
+      <div class="panel" style="margin-bottom:24px;">
+        <h2>Novo lançamento</h2>
+        <div class="toggle-tipo">
+          <button type="button" data-tipo="despesa" class="active">Despesa</button>
+          <button type="button" data-tipo="receita">Receita</button>
+        </div>
+        <div class="field">
+          <label for="descInput">Descrição</label>
+          <input type="text" id="descInput" placeholder="Ex: Mercado, Aluguel, Salário...">
+        </div>
+        <div class="field">
+          <label for="valorInput" id="valorLabel">Valor (R$)</label>
+          <input type="number" id="valorInput" placeholder="0,00" step="0.01" min="0">
+        </div>
+        <div class="field-inline">
+          <label class="checkbox-label">
+            <input type="checkbox" id="parceladoCheck">
+            <span>Parcelar em várias vezes</span>
+          </label>
+        </div>
+        <div class="field" id="parcelasField" style="display:none;">
+          <label for="parcelasInput">Número de parcelas</label>
+          <input type="number" id="parcelasInput" min="2" max="24" value="2">
+          <div class="field-hint" id="parcelasHint"></div>
+        </div>
+        <div class="field">
+          <label for="catInput">Categoria</label>
+          <select id="catInput"></select>
+        </div>
+        <div class="field">
+          <label for="dataInput" id="dataLabel">Data</label>
+          <input type="date" id="dataInput">
+        </div>
+        <button class="btn-add" id="addBtn">Adicionar lançamento</button>
+      </div>
+
+      <div class="panel" style="margin-bottom:24px;">
+        <h2>Fixos mensais</h2>
+        <p class="panel-desc">Contas que se repetem todo mês (aluguel, salário, assinaturas) — são lançadas automaticamente.</p>
+        <div class="toggle-tipo">
+          <button type="button" data-tipo-fixo="despesa" class="active">Despesa</button>
+          <button type="button" data-tipo-fixo="receita">Receita</button>
+        </div>
+        <div class="field">
+          <label for="fixoDesc">Descrição</label>
+          <input type="text" id="fixoDesc" placeholder="Ex: Aluguel, Netflix, Salário...">
+        </div>
+        <div class="field">
+          <label for="fixoValor">Valor (R$)</label>
+          <input type="number" id="fixoValor" placeholder="0,00" step="0.01" min="0">
+        </div>
+        <div class="field">
+          <label for="fixoCat">Categoria</label>
+          <select id="fixoCat"></select>
+        </div>
+        <div class="field">
+          <label for="fixoDia">Dia do mês em que lança</label>
+          <input type="number" id="fixoDia" min="1" max="28" value="1">
+        </div>
+        <button class="btn-add" id="fixoAddBtn" style="background:var(--gold);">Adicionar fixo</button>
+        <div id="fixosList" class="fixos-list"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Por categoria</h2>
+        <div id="catBreakdown"></div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="panel">
+        <h2>Lançamentos do mês</h2>
+        <div id="txList"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>seus dados ficam sincronizados com sua conta na nuvem &middot; <a href="privacidade.html" style="color:inherit;">Política de Privacidade</a> &middot; <button id="pixBtn" class="footer-link-btn">Apoiar com Pix ☕</button></footer>
+</div>
+
+<div id="pixOverlay" class="pix-overlay">
+  <div class="pix-box">
+    <button id="pixClose" class="pix-close" aria-label="Fechar">×</button>
+    <div class="pix-title">Gostou do Livro-Caixa?</div>
+    <p class="pix-text">O app é gratuito e continuará sendo. Se ele te ajuda a organizar as
+    finanças e você quiser retribuir de alguma forma, fica aqui uma chave Pix — totalmente
+    opcional, sem nenhuma obrigação.</p>
+    <div class="pix-key-box">
+      <span id="pixKeyText">luizshelly1712@gmail.com</span>
+      <button id="pixCopyBtn">Copiar</button>
+    </div>
+    <div class="pix-thanks">Qualquer valor já ajuda bastante. Obrigado! 🙏</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ====== CONFIGURAÇÃO DO FIREBASE ======
+  // 1. Crie um projeto grátis em https://console.firebase.google.com
+  // 2. Ative Authentication > Sign-in method > E-mail/senha
+  // 3. Crie um banco Firestore (modo produção) em Build > Firestore Database
+  // 4. Em Configurações do projeto > Geral > Seus apps > Web, copie o firebaseConfig e cole abaixo
+  const firebaseConfig = {
+    apiKey: "AIzaSyAUxDEtMMLwIPtbfGO7HhTfXEQuQQh0IOQ",
+    authDomain: "livro-caixa-5ad67.firebaseapp.com",
+    projectId: "livro-caixa-5ad67",
+    storageBucket: "livro-caixa-5ad67.firebasestorage.app",
+    messagingSenderId: "258067413070",
+    appId: "1:258067413070:web:0b3b524abd754bcfd82b1f"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  db.enablePersistence({ synchronizeTabs: true }).catch(()=>{});
+
+  const CATS = {
+    despesa: ["Alimentação","Transporte","Moradia","Lazer","Saúde","Educação","Contas","Outros"],
+    receita: ["Salário","Freelance","Investimentos","Presente","Outros"]
+  };
+  const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  let tx = [];
+  let fixos = [];
+  let unsubscribe = null;
+  let unsubscribeFixos = null;
+  let currentUser = null;
+  const mesesGerados = new Set();
+
+  let currentTipo = "despesa";
+  let viewDate = new Date();
+  viewDate.setDate(1);
+
+  const els = {
+    monthLabel: document.getElementById('monthLabel'),
+    prevMonth: document.getElementById('prevMonth'),
+    nextMonth: document.getElementById('nextMonth'),
+    totalReceitas: document.getElementById('totalReceitas'),
+    totalDespesas: document.getElementById('totalDespesas'),
+    totalSaldo: document.getElementById('totalSaldo'),
+    toggleBtns: document.querySelectorAll('.toggle-tipo button'),
+    descInput: document.getElementById('descInput'),
+    valorInput: document.getElementById('valorInput'),
+    catInput: document.getElementById('catInput'),
+    dataInput: document.getElementById('dataInput'),
+    addBtn: document.getElementById('addBtn'),
+    catBreakdown: document.getElementById('catBreakdown'),
+    txList: document.getElementById('txList'),
+    qaDesc: document.getElementById('qaDesc'),
+    qaValor: document.getElementById('qaValor'),
+    qaBtn: document.getElementById('qaBtn'),
+    dailyChart: document.getElementById('dailyChart'),
+    dailyMonthLabel: document.getElementById('dailyMonthLabel'),
+    dailyAvg: document.getElementById('dailyAvg'),
+    dailyMax: document.getElementById('dailyMax'),
+    authOverlay: document.getElementById('authOverlay'),
+    authEmail: document.getElementById('authEmail'),
+    authSenha: document.getElementById('authSenha'),
+    authSubmit: document.getElementById('authSubmit'),
+    authError: document.getElementById('authError'),
+    tabLogin: document.getElementById('tabLogin'),
+    tabSignup: document.getElementById('tabSignup'),
+    userEmail: document.getElementById('userEmail'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    syncDot: document.getElementById('syncDot'),
+    syncText: document.getElementById('syncText'),
+    parceladoCheck: document.getElementById('parceladoCheck'),
+    parcelasField: document.getElementById('parcelasField'),
+    parcelasInput: document.getElementById('parcelasInput'),
+    parcelasHint: document.getElementById('parcelasHint'),
+    valorLabel: document.getElementById('valorLabel'),
+    dataLabel: document.getElementById('dataLabel'),
+    fixoDesc: document.getElementById('fixoDesc'),
+    fixoValor: document.getElementById('fixoValor'),
+    fixoCat: document.getElementById('fixoCat'),
+    fixoDia: document.getElementById('fixoDia'),
+    fixoAddBtn: document.getElementById('fixoAddBtn'),
+    fixosList: document.getElementById('fixosList'),
+  };
+
+  function fmt(v){
+    return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }
+
+  // ====== AUTENTICAÇÃO ======
+  let authMode = 'login';
+  els.tabLogin.addEventListener('click', ()=>{
+    authMode = 'login';
+    els.tabLogin.classList.add('active');
+    els.tabSignup.classList.remove('active');
+    els.authSubmit.textContent = 'Entrar';
+    els.authError.textContent = '';
+  });
+  els.tabSignup.addEventListener('click', ()=>{
+    authMode = 'signup';
+    els.tabSignup.classList.add('active');
+    els.tabLogin.classList.remove('active');
+    els.authSubmit.textContent = 'Criar conta';
+    els.authError.textContent = '';
+  });
+
+  els.authSubmit.addEventListener('click', ()=>{
+    const email = els.authEmail.value.trim();
+    const senha = els.authSenha.value;
+    if(!email || !senha){
+      els.authError.textContent = 'Preencha e-mail e senha.';
+      return;
+    }
+    els.authError.textContent = '';
+    els.authSubmit.textContent = 'Aguarde...';
+    const acao = authMode === 'login'
+      ? auth.signInWithEmailAndPassword(email, senha)
+      : auth.createUserWithEmailAndPassword(email, senha);
+    acao.catch(err=>{
+      els.authError.textContent = traduzErro(err.code);
+    }).finally(()=>{
+      els.authSubmit.textContent = authMode === 'login' ? 'Entrar' : 'Criar conta';
+    });
+  });
+
+  function traduzErro(code){
+    const mapa = {
+      'auth/invalid-email': 'E-mail inválido.',
+      'auth/user-not-found': 'Conta não encontrada. Tente criar uma conta.',
+      'auth/wrong-password': 'Senha incorreta.',
+      'auth/email-already-in-use': 'Esse e-mail já tem uma conta. Tente entrar.',
+      'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+      'auth/invalid-credential': 'E-mail ou senha incorretos.',
+      'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'Firebase não configurado ainda — cole seu firebaseConfig no código.'
+    };
+    return mapa[code] || 'Não foi possível continuar. Verifique os dados e tente de novo.';
+  }
+
+  els.logoutBtn.addEventListener('click', ()=> auth.signOut());
+
+  auth.onAuthStateChanged(user=>{
+    currentUser = user;
+    if(unsubscribe){ unsubscribe(); unsubscribe = null; }
+    if(unsubscribeFixos){ unsubscribeFixos(); unsubscribeFixos = null; }
+    mesesGerados.clear();
+    if(user){
+      els.authOverlay.style.display = 'none';
+      els.userEmail.textContent = user.email;
+      els.logoutBtn.style.display = '';
+      subscribeToTransacoes(user.uid);
+      subscribeToFixos(user.uid);
+    } else {
+      els.authOverlay.style.display = 'flex';
+      tx = [];
+      fixos = [];
+    }
+  });
+
+  function subscribeToTransacoes(uid){
+    const col = db.collection('usuarios').doc(uid).collection('transacoes');
+    unsubscribe = col.onSnapshot(snap=>{
+      tx = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+      els.syncDot.classList.toggle('off', snap.metadata.fromCache);
+      els.syncText.textContent = snap.metadata.fromCache ? 'offline (dados salvos localmente)' : 'sincronizado';
+      render();
+    }, err=>{
+      els.syncText.textContent = 'erro de sincronização';
+    });
+  }
+
+  function subscribeToFixos(uid){
+    const col = db.collection('usuarios').doc(uid).collection('fixos');
+    unsubscribeFixos = col.onSnapshot(snap=>{
+      fixos = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+      renderFixosList();
+      gerarFixosDoMes(monthKey(viewDate));
+    }, err=>{});
+  }
+
+  function addTransacao(t){
+    if(!currentUser) return Promise.reject();
+    return db.collection('usuarios').doc(currentUser.uid).collection('transacoes').add(t)
+      .catch(()=>{ els.syncText.textContent = 'salvo localmente, sincroniza ao reconectar'; });
+  }
+
+  // ====== PARCELAMENTO ======
+  els.parceladoCheck.addEventListener('change', ()=>{
+    const on = els.parceladoCheck.checked;
+    els.parcelasField.style.display = on ? '' : 'none';
+    els.valorLabel.textContent = on ? 'Valor total (R$)' : 'Valor (R$)';
+    els.dataLabel.textContent = on ? '1ª parcela — data' : 'Data';
+    atualizarDicaParcelas();
+  });
+  els.parcelasInput.addEventListener('input', atualizarDicaParcelas);
+  els.valorInput.addEventListener('input', atualizarDicaParcelas);
+  function atualizarDicaParcelas(){
+    if(!els.parceladoCheck.checked) return;
+    const total = parseFloat(els.valorInput.value) || 0;
+    const n = Math.max(2, parseInt(els.parcelasInput.value, 10) || 2);
+    const porParcela = total / n;
+    els.parcelasHint.textContent = total>0 ? `${n}x de ${fmt(porParcela)}` : '';
+  }
+
+  function addTransacaoParcelada(desc, totalValor, n, categoria, tipo, dataInicial){
+    const grupoId = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const base = Math.floor((totalValor/n) * 100) / 100;
+    const resto = Math.round((totalValor - base*n) * 100) / 100;
+    const dataBase = new Date(dataInicial+"T00:00:00");
+    for(let i=0; i<n; i++){
+      const d = new Date(dataBase.getFullYear(), dataBase.getMonth()+i, dataBase.getDate());
+      const iso = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0')+"-"+String(d.getDate()).padStart(2,'0');
+      const valorParcela = i===n-1 ? Math.round((base+resto)*100)/100 : base;
+      addTransacao({
+        desc: `${desc} (${i+1}/${n})`,
+        valor: valorParcela,
+        categoria, tipo, data: iso,
+        parcelaGrupoId: grupoId, parcelaAtual: i+1, parcelaTotal: n
+      });
+    }
+  }
+
+  // ====== FIXOS MENSAIS ======
+  let currentTipoFixo = "despesa";
+  document.querySelectorAll('[data-tipo-fixo]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      currentTipoFixo = btn.dataset.tipoFixo;
+      document.querySelectorAll('[data-tipo-fixo]').forEach(b=>b.classList.toggle('active', b===btn));
+      populateFixoCats();
+    });
+  });
+  function populateFixoCats(){
+    els.fixoCat.innerHTML = "";
+    CATS[currentTipoFixo].forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      els.fixoCat.appendChild(opt);
+    });
+  }
+
+  let editingFixoId = null;
+
+  els.fixoAddBtn.addEventListener('click', ()=>{
+    if(!currentUser) return;
+    const desc = els.fixoDesc.value.trim();
+    const valor = parseFloat(els.fixoValor.value);
+    const dia = Math.min(28, Math.max(1, parseInt(els.fixoDia.value,10) || 1));
+    if(!desc || !valor || valor<=0){
+      els.fixoAddBtn.textContent = editingFixoId ? "Preencha descrição e valor" : "Preencha descrição e valor";
+      setTimeout(()=>{ els.fixoAddBtn.textContent = editingFixoId ? "Salvar alterações" : "Adicionar fixo"; }, 1600);
+      return;
+    }
+    const dados = { desc, valor, categoria: els.fixoCat.value, tipo: currentTipoFixo, diaDoMes: dia };
+    if(editingFixoId){
+      db.collection('usuarios').doc(currentUser.uid).collection('fixos').doc(editingFixoId).update(dados);
+      cancelarEdicaoFixo();
+    } else {
+      db.collection('usuarios').doc(currentUser.uid).collection('fixos').add({
+        ...dados, geradoPara: [], criadoEm: Date.now()
+      });
+      els.fixoDesc.value = ""; els.fixoValor.value = "";
+    }
+  });
+
+  function editarFixo(id){
+    const f = fixos.find(x=>x.id===id);
+    if(!f) return;
+    editingFixoId = id;
+    els.fixoDesc.value = f.desc;
+    els.fixoValor.value = f.valor;
+    els.fixoDia.value = f.diaDoMes;
+    currentTipoFixo = f.tipo;
+    document.querySelectorAll('[data-tipo-fixo]').forEach(b=>b.classList.toggle('active', b.dataset.tipoFixo===f.tipo));
+    populateFixoCats();
+    els.fixoCat.value = f.categoria;
+    els.fixoAddBtn.textContent = "Salvar alterações";
+    if(!document.getElementById('cancelEdicaoFixo')){
+      const cancelBtn = document.createElement('button');
+      cancelBtn.id = 'cancelEdicaoFixo';
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = 'Cancelar edição';
+      cancelBtn.style.cssText = 'width:100%; margin-top:8px; padding:8px 0; background:none; border:1px solid var(--line); color:var(--ink-soft); font-family:Inter; font-size:12px; cursor:pointer;';
+      cancelBtn.addEventListener('click', cancelarEdicaoFixo);
+      els.fixoAddBtn.insertAdjacentElement('afterend', cancelBtn);
+    }
+    els.fixoDesc.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  function cancelarEdicaoFixo(){
+    editingFixoId = null;
+    els.fixoDesc.value = ""; els.fixoValor.value = ""; els.fixoDia.value = 1;
+    els.fixoAddBtn.textContent = "Adicionar fixo";
+    const cancelBtn = document.getElementById('cancelEdicaoFixo');
+    if(cancelBtn) cancelBtn.remove();
+  }
+
+  function deleteFixo(id){
+    if(!currentUser) return;
+    if(!confirm("Remover este lançamento fixo? Os lançamentos já criados nos meses anteriores não serão apagados.")) return;
+    if(editingFixoId===id) cancelarEdicaoFixo();
+    db.collection('usuarios').doc(currentUser.uid).collection('fixos').doc(id).delete();
+  }
+
+  function renderFixosList(){
+    els.fixosList.innerHTML = "";
+    if(fixos.length===0){
+      els.fixosList.innerHTML = '<div class="empty-note">Nenhum fixo cadastrado ainda.</div>';
+      return;
+    }
+    fixos.slice().sort((a,b)=>a.diaDoMes-b.diaDoMes).forEach(f=>{
+      const row = document.createElement('div');
+      row.className = 'fixo-row';
+      row.innerHTML = `
+        <div class="fixo-left">
+          <span class="tx-dot ${f.tipo}"></span>
+          <div class="fixo-info">
+            <div class="desc">${escapeHtml(f.desc)}</div>
+            <div class="meta">dia ${f.diaDoMes} &middot; ${escapeHtml(f.categoria)}</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span class="fixo-val ${f.tipo==='receita'?'pos':'neg'}">${fmt(f.valor)}</span>
+          <button class="fixo-edit" data-id="${f.id}" aria-label="Editar" title="Editar">&#9998;</button>
+          <button class="fixo-del" data-id="${f.id}" aria-label="Remover">×</button>
+        </div>
+      `;
+      els.fixosList.appendChild(row);
+    });
+    els.fixosList.querySelectorAll('.fixo-del').forEach(btn=>{
+      btn.addEventListener('click', ()=> deleteFixo(btn.dataset.id));
+    });
+    els.fixosList.querySelectorAll('.fixo-edit').forEach(btn=>{
+      btn.addEventListener('click', ()=> editarFixo(btn.dataset.id));
+    });
+  }
+
+  function gerarFixosDoMes(key){
+    if(!currentUser || fixos.length===0) return;
+    if(mesesGerados.has(key)) return; // já processado nesta sessão
+    mesesGerados.add(key);
+    const [ano, mes] = key.split('-').map(Number);
+    fixos.forEach(f=>{
+      const geradoPara = f.geradoPara || [];
+      if(geradoPara.includes(key)) return;
+      const dia = Math.min(f.diaDoMes, new Date(ano, mes, 0).getDate());
+      const iso = key + "-" + String(dia).padStart(2,'0');
+      addTransacao({
+        desc: f.desc, valor: f.valor, categoria: f.categoria, tipo: f.tipo,
+        data: iso, origemFixoId: f.id
+      });
+      db.collection('usuarios').doc(currentUser.uid).collection('fixos').doc(f.id).update({
+        geradoPara: firebase.firestore.FieldValue.arrayUnion(key)
+      });
+    });
+  }
+
+  function populateCats(){
+    els.catInput.innerHTML = "";
+    CATS[currentTipo].forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      els.catInput.appendChild(opt);
+    });
+  }
+
+  els.toggleBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      currentTipo = btn.dataset.tipo;
+      els.toggleBtns.forEach(b=>b.classList.toggle('active', b===btn));
+      populateCats();
+    });
+  });
+
+  function todayISO(){
+    const d = new Date();
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off*60000).toISOString().slice(0,10);
+  }
+  els.dataInput.value = todayISO();
+
+  els.addBtn.addEventListener('click', ()=>{
+    const desc = els.descInput.value.trim();
+    const valor = parseFloat(els.valorInput.value);
+    const cat = els.catInput.value;
+    const data = els.dataInput.value;
+    if(!desc || !valor || valor<=0 || !data){
+      els.addBtn.textContent = "Preencha descrição, valor e data";
+      setTimeout(()=>{ els.addBtn.textContent = "Adicionar lançamento"; }, 1600);
+      return;
+    }
+    if(els.parceladoCheck.checked){
+      const n = Math.max(2, Math.min(24, parseInt(els.parcelasInput.value,10) || 2));
+      addTransacaoParcelada(desc, valor, n, cat, currentTipo, data);
+    } else {
+      addTransacao({ desc, valor, categoria: cat, tipo: currentTipo, data });
+    }
+    els.descInput.value = "";
+    els.valorInput.value = "";
+    els.dataInput.value = todayISO();
+    els.parceladoCheck.checked = false;
+    els.parcelasField.style.display = 'none';
+    els.valorLabel.textContent = 'Valor (R$)';
+    els.dataLabel.textContent = 'Data';
+    viewDate = new Date(data+"T00:00:00");
+    viewDate.setDate(1);
+  });
+
+  els.qaBtn.addEventListener('click', ()=>{
+    const desc = els.qaDesc.value.trim();
+    const valor = parseFloat(els.qaValor.value);
+    if(!desc || !valor || valor<=0){
+      els.qaBtn.textContent = "Preencha descrição e valor";
+      setTimeout(()=>{ els.qaBtn.textContent = "Registrar"; }, 1600);
+      return;
+    }
+    const hoje = todayISO();
+    addTransacao({ desc, valor, categoria: "Outros", tipo: "despesa", data: hoje });
+    els.qaDesc.value = "";
+    els.qaValor.value = "";
+    viewDate = new Date(hoje+"T00:00:00");
+    viewDate.setDate(1);
+  });
+
+  function deleteTx(id){
+    if(!currentUser) return;
+    db.collection('usuarios').doc(currentUser.uid).collection('transacoes').doc(id).delete();
+  }
+
+  function monthKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,'0'); }
+
+  els.prevMonth.addEventListener('click', ()=>{
+    viewDate.setMonth(viewDate.getMonth()-1);
+    render();
+  });
+  els.nextMonth.addEventListener('click', ()=>{
+    viewDate.setMonth(viewDate.getMonth()+1);
+    render();
+  });
+
+  function render(){
+    els.monthLabel.textContent = MESES[viewDate.getMonth()] + " " + viewDate.getFullYear();
+    const key = monthKey(viewDate);
+    gerarFixosDoMes(key);
+    const monthTx = tx.filter(t=>t.data && t.data.startsWith(key)).sort((a,b)=> b.data.localeCompare(a.data));
+
+    let receitas=0, despesas=0;
+    monthTx.forEach(t=>{
+      if(t.tipo==='receita') receitas += t.valor; else despesas += t.valor;
+    });
+    const saldo = receitas - despesas;
+    els.totalReceitas.textContent = fmt(receitas);
+    els.totalDespesas.textContent = fmt(despesas);
+    els.totalSaldo.textContent = fmt(saldo);
+    els.totalSaldo.classList.toggle('pos', saldo>=0);
+    els.totalSaldo.classList.toggle('neg', saldo<0);
+
+    // category breakdown (despesas)
+    const byCat = {};
+    monthTx.filter(t=>t.tipo==='despesa').forEach(t=>{
+      byCat[t.categoria] = (byCat[t.categoria]||0) + t.valor;
+    });
+    const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    els.catBreakdown.innerHTML = "";
+    if(catEntries.length===0){
+      els.catBreakdown.innerHTML = '<div class="empty-note">Nenhuma despesa registrada neste mês.</div>';
+    } else {
+      const max = catEntries[0][1];
+      catEntries.forEach(([cat, val])=>{
+        const row = document.createElement('div');
+        row.className = 'cat-bar';
+        row.innerHTML = `
+          <div class="cat-bar-top"><span class="nome">${cat}</span><span class="val">${fmt(val)}</span></div>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(val/max*100).toFixed(0)}%"></div></div>
+        `;
+        els.catBreakdown.appendChild(row);
+      });
+    }
+
+    renderDailyChart(monthTx, key);
+
+    // transactions list grouped by day
+    els.txList.innerHTML = "";
+    if(monthTx.length===0){
+      els.txList.innerHTML = `
+        <div class="empty-state">
+          <div class="big">O livro está em branco.</div>
+          <div class="small">Adicione o primeiro lançamento deste mês ao lado.</div>
+        </div>`;
+      return;
+    }
+    const byDay = {};
+    monthTx.forEach(t=>{ (byDay[t.data] = byDay[t.data]||[]).push(t); });
+    Object.keys(byDay).sort((a,b)=>b.localeCompare(a)).forEach(day=>{
+      const dayDiv = document.createElement('div');
+      dayDiv.className = 'tx-day';
+      const dObj = new Date(day+"T00:00:00");
+      const label = dObj.toLocaleDateString('pt-BR', {day:'2-digit', month:'long', weekday:'long'});
+      dayDiv.innerHTML = `<div class="tx-day-label">${label}</div>`;
+      byDay[day].forEach(t=>{
+        const row = document.createElement('div');
+        row.className = 'tx-row';
+        row.innerHTML = `
+          <div class="tx-left">
+            <span class="tx-dot ${t.tipo}"></span>
+            <div class="tx-info">
+              <div class="desc">${escapeHtml(t.desc)}${t.parcelaTotal ? `<span class="badge parcela">${t.parcelaAtual}/${t.parcelaTotal}</span>` : ''}${t.origemFixoId ? `<span class="badge fixo">fixo</span>` : ''}</div>
+              <div class="cat">${escapeHtml(t.categoria)}</div>
+            </div>
+          </div>
+          <div class="tx-right">
+            <span class="tx-val ${t.tipo==='receita'?'pos':'neg'}">${t.tipo==='receita'?'+':'-'} ${fmt(t.valor)}</span>
+            <button class="tx-del" data-id="${t.id}" aria-label="Excluir">×</button>
+          </div>
+        `;
+        dayDiv.appendChild(row);
+      });
+      els.txList.appendChild(dayDiv);
+    });
+    els.txList.querySelectorAll('.tx-del').forEach(btn=>{
+      btn.addEventListener('click', ()=> deleteTx(btn.dataset.id));
+    });
+  }
+
+  function renderDailyChart(monthTx, key){
+    els.dailyMonthLabel.textContent = MESES[viewDate.getMonth()] + "/" + viewDate.getFullYear();
+    const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate();
+    const totals = new Array(daysInMonth+1).fill(0);
+    monthTx.filter(t=>t.tipo==='despesa').forEach(t=>{
+      const day = parseInt(t.data.slice(8,10), 10);
+      if(day>=1 && day<=daysInMonth) totals[day] += t.valor;
+    });
+    const max = Math.max(...totals);
+    const todayStr = todayISO();
+    const isCurrentMonth = todayStr.startsWith(key);
+    const todayDay = isCurrentMonth ? parseInt(todayStr.slice(8,10),10) : -1;
+
+    els.dailyChart.innerHTML = "";
+    for(let d=1; d<=daysInMonth; d++){
+      const val = totals[d];
+      const col = document.createElement('div');
+      col.className = 'daily-col' + (d===todayDay ? ' today' : '');
+      const heightPct = max>0 ? Math.max((val/max*100), val>0 ? 6 : 0) : 0;
+      const showLabel = (d===1 || d%5===0 || d===daysInMonth || d===todayDay);
+      col.innerHTML = `
+        <div class="bar ${val===0?'empty':''}" style="height:${val===0?'2px':heightPct+'%'}" title="Dia ${d}: ${fmt(val)}"></div>
+        <div class="daynum">${showLabel ? d : ''}</div>
+      `;
+      els.dailyChart.appendChild(col);
+    }
+
+    const totalGasto = totals.reduce((a,b)=>a+b,0);
+    const diasComGasto = totals.filter(v=>v>0).length;
+    const media = diasComGasto>0 ? totalGasto/daysInMonth : 0;
+    els.dailyAvg.textContent = fmt(media);
+    let maxDay = -1, maxVal = 0;
+    totals.forEach((v,i)=>{ if(v>maxVal){ maxVal=v; maxDay=i; } });
+    els.dailyMax.textContent = maxDay>0 ? `dia ${maxDay} (${fmt(maxVal)})` : "—";
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  populateCats();
+  populateFixoCats();
+
+  // ====== APOIAR COM PIX ======
+  const pixOverlay = document.getElementById('pixOverlay');
+  const pixBtn = document.getElementById('pixBtn');
+  const pixClose = document.getElementById('pixClose');
+  const pixCopyBtn = document.getElementById('pixCopyBtn');
+  const pixKeyText = document.getElementById('pixKeyText');
+
+  pixBtn.addEventListener('click', ()=> pixOverlay.classList.add('open'));
+  pixClose.addEventListener('click', ()=> pixOverlay.classList.remove('open'));
+  pixOverlay.addEventListener('click', (e)=>{ if(e.target===pixOverlay) pixOverlay.classList.remove('open'); });
+
+  pixCopyBtn.addEventListener('click', async ()=>{
+    const chave = pixKeyText.textContent.trim();
+    try{
+      await navigator.clipboard.writeText(chave);
+    }catch(e){
+      const ta = document.createElement('textarea');
+      ta.value = chave; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    pixCopyBtn.textContent = 'Copiado!';
+    pixCopyBtn.classList.add('copied');
+    setTimeout(()=>{ pixCopyBtn.textContent = 'Copiar'; pixCopyBtn.classList.remove('copied'); }, 1800);
+  });
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
