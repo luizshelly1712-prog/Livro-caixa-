@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.luizshelly.livrocaixa",
+    "sha256_cert_fingerprints": ["F8:62:DC:D7:A7:0A:EA:FC:8F:D2:1A:88:51:E7:2D:F2:0A:12:F4:8D:D4:75:C8:E7:7C:90:F5:D7:0B:F7:3E:9A"]
+  }
+}]
